@@ -47,7 +47,8 @@ def get_account_value():
 def get_current_price(symbol):
     bars = api.get_bars(symbol, '1Min', limit=1).df
     if not bars.empty:
-        return bars['close'].iloc[-1]
+        close_col = 'close' if 'close' in bars.columns else 'Close'
+        return bars[close_col].iloc[-1]
     return None
 
 def get_ratio_rsi():
@@ -55,14 +56,30 @@ def get_ratio_rsi():
     rsp_bars = api.get_bars('RSP', '1Hour', limit=LOOKBACK_BARS).df
     vgt_bars = api.get_bars('VGT', '1Hour', limit=LOOKBACK_BARS).df
     
+    # Ensure we have data
+    if rsp_bars.empty or vgt_bars.empty:
+        return None
+    
+    # Align indices
     common_idx = rsp_bars.index.intersection(vgt_bars.index)
     rsp_bars = rsp_bars.loc[common_idx]
     vgt_bars = vgt_bars.loc[common_idx]
     
-    ratio = rsp_bars['close'] / vgt_bars['close']
+    # Get close column (handle both uppercase and lowercase)
+    if 'close' in rsp_bars.columns:
+        rsp_close = rsp_bars['close']
+        vgt_close = vgt_bars['close']
+    else:
+        rsp_close = rsp_bars['Close']
+        vgt_close = vgt_bars['Close']
+    
+    # Calculate ratio as a pandas Series
+    ratio = pd.Series(rsp_close.values / vgt_close.values, index=common_idx)
+    
+    # Calculate RSI
     rsi = calculate_rsi(ratio, period=14)
     
-    return rsi.iloc[-1] if not rsi.empty else None
+    return rsi.iloc[-1] if not rsi.empty and len(rsi) > 0 else None
 
 def close_all_positions():
     global current_position
